@@ -1,13 +1,14 @@
-var Service = require("HAP-NodeJS").Service;
-var Characteristic = require("HAP-NodeJS").Characteristic;
+var Service, Characteristic;
 var Request = require("request");
 var EventSource = require('eventsource');
 
 var temperatureService;
 var lightSensorService;
-var humiditySensor;
+var humiditySensorService;
 var bulbService;
+
 var bulbServiceHandling;
+
 var roomName;
 
 var eventName = "HKSValues";
@@ -16,11 +17,13 @@ var url;
 var deviceid;
 var accesstoken;
 
-module.exports = {
-	accessory: ParticleAccessory
+module.exports = function (homebridge) {
+    Service = homebridge.hap.Service;
+    Characteristic = homebridge.hap.Characteristic;
+    homebridge.registerAccessory("homebridge-particleio", "ParticleIoAccessory", ParticleIoAccessory);
 }
 
-function ParticleAccessory(log, config) {
+function ParticleIoAccessory(log, config) {
 	this.log = log;
 
 	// url info
@@ -35,7 +38,7 @@ function random(low, high) {
 	return Math.random() * (high - low) + low;
 }
 
-ParticleAccessory.prototype = {
+ParticleIoAccessory.prototype = {
 	identify: function(callback) {
 		this.log("Identify requested!");
 		callback(); // success
@@ -171,10 +174,27 @@ ParticleAccessory.prototype = {
 		// the default values for things like serial number, model, etc.
 		var informationService = new Service.AccessoryInformation();
 
-		informationService
-			.setCharacteristic(Characteristic.Manufacturer, "Particle")
-			.setCharacteristic(Characteristic.Model, "Photon")
-			.setCharacteristic(Characteristic.SerialNumber, "AA098BB09");
+		var particleDeviceInfoUrl = url + deviceid + "?access_token=" + accesstoken;
+		console.log(particleDeviceInfoUrl);
+
+		var particleDeviceInfoJson;
+
+		Request.get(particleDeviceInfoUrl, function(error, response) {
+				if(!error && response.statusCode === 200 ) {
+					particleDeviceInfoJson = response.toJSON();
+					console.log(particleDeviceInfoJson);
+					informationService
+						.setCharacteristic(Characteristic.Manufacturer, "Particle")
+						.setCharacteristic(Characteristic.Model,
+							particleDeviceInfoJson.product_id === 0 ? "Core" :
+							particleDeviceInfoJson.product_id === 6? "Photon" :
+							"Electron/unknown"
+						)
+						.setCharacteristic(Characteristic.SerialNumber, deviceid);
+				}
+			});
+			
+
 
 		temperatureService = new Service.TemperatureSensor(roomName + " Temperature");
 
@@ -188,9 +208,9 @@ ParticleAccessory.prototype = {
 			.getCharacteristic(Characteristic.CurrentAmbientLightLevel)
 			.on('get', this.getDefaultValue.bind(this));
 
-		humiditySensor = new Service.HumiditySensor();
+		humiditySensorService = new Service.HumiditySensor();
 
-		humiditySensor
+		humiditySensorService
 			.getCharacteristic(Characteristic.CurrentRelativeHumidity)
 			.on('get', this.getDefaultValue.bind(this));
 
@@ -251,9 +271,9 @@ ParticleAccessory.prototype = {
 			}, false);
 
 		if (this.bulbServiceHandling == "yes") {
-			return [informationService, temperatureService, lightSensorService, humiditySensor, bulbService];
+ervice
 		}else{
-			return [informationService, temperatureService, lightSensorService, humiditySensor];
+			return [informationService, temperatureService, lightSensorService, humiditySensorService];
 		}
 	}
 };

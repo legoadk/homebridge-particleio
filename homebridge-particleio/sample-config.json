@@ -14,13 +14,13 @@
 
     "accessories": [
         {
-            "accessory": "ParticleAccessory",
-            "name": "Particle Sensors",
+            "accessory": "ParticleIoAccessory",
+            "name": "Particle Photon",
             "cloud_url": "https://api.spark.io/v1/devices/",
             "deviceid": "replace with your deviceid",
             "accesstoken": "replace with your access token",
                         "bulb_service": "yes",
-                        "room_name": "Bedroom"
+                        "room_name": "Hallway"
         }
     ]
 }

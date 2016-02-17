@@ -1,0 +1,36 @@
+{
+  "name": "homebridge-particleio",
+  "version": "0.0.1",
+  "description": "Particle.io plugin for Homebridge",
+  "license": "ISC",
+  "keywords": [
+    "homebridge-plugin"
+  ],
+  "engines": {
+    "node": ">=0.12.0",
+    "homebridge": ">=0.2.0"
+  },
+  "author": {
+    "name": "legoadk"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/legoadk/homebridge-particleio.git"
+  },
+  "dependencies": {
+    "request": "^2.65.0"
+  },
+  "homepage": "https://github.com/legoadk/homebridge-particleio#readme",
+  "_id": "homebridge-particleio@0.0.1",
+  "scripts": {},
+  "_from": "homebridge-particleio@*",
+  "_npmVersion": "3.3.12",
+  "_nodeVersion": "5.1.1",
+  "maintainers": [
+    {
+      "name": "legoadk",
+      "email": "legoguy@gmail.com"
+    }
+  ],
+  "directories": {}
+}
