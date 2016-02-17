@@ -72,7 +72,7 @@ ParticleIoAccessory.prototype = {
         }
       }
     );
-  }
+  },
 	setBulbState: function(state, callback) {
 		var setLightOnUrl = url + deviceid + "/ctrllight";
 
