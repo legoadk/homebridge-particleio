@@ -2,6 +2,7 @@ var Service, Characteristic;
 var Request = require("request");
 var EventSource = require('eventsource');
 
+var informationService;
 var temperatureService;
 var lightSensorService;
 var humiditySensorService;
@@ -32,6 +33,8 @@ function ParticleIoAccessory(log, config) {
 	accesstoken = config["accesstoken"];
 	bulbServiceHandling = config["bulb_service"];
 	roomName = config["room_name"];
+  variables = config["variables"]; // An object of variables that this device publishes
+  events = config["events"]; // an object of events that this device publishes and that this Hamebridge accessory should pay attention to
 }
 
 function random(low, high) {
@@ -48,6 +51,28 @@ ParticleIoAccessory.prototype = {
 		callback(null, 0.0);
 	},
 
+  getModelInfo: function(callback) {
+    var particleDeviceInfoUrl = url + deviceid + "?access_token=" + accesstoken;
+		console.log(particleDeviceInfoUrl);
+
+    Request.get(particleDeviceInfoUrl,
+      function(error, response, body) {
+        console.log(response);
+        if(!error && response.statusCode === 200 ) {
+          particleDeviceInfoJson = response.toJSON();
+
+          informationService.setCharacteristic(Characteristic.Model,
+            particleDeviceInfoJson.product_id === 0 ? "Core" :
+            particleDeviceInfoJson.product_id === 6 ? "Photon" :
+            "Electron/unknown"
+          );
+          callback();
+        } else {
+          callback(error);
+        }
+      }
+    );
+  }
 	setBulbState: function(state, callback) {
 		var setLightOnUrl = url + deviceid + "/ctrllight";
 
@@ -172,29 +197,13 @@ ParticleIoAccessory.prototype = {
 	getServices: function() {
 		// you can OPTIONALLY create an information service if you wish to override
 		// the default values for things like serial number, model, etc.
-		var informationService = new Service.AccessoryInformation();
+		informationService = new Service.AccessoryInformation();
 
-		var particleDeviceInfoUrl = url + deviceid + "?access_token=" + accesstoken;
-		console.log(particleDeviceInfoUrl);
-
-		var particleDeviceInfoJson;
-
-		Request.get(particleDeviceInfoUrl, function(error, response) {
-				if(!error && response.statusCode === 200 ) {
-					particleDeviceInfoJson = response.toJSON();
-					console.log(particleDeviceInfoJson);
-					informationService
-						.setCharacteristic(Characteristic.Manufacturer, "Particle")
-						.setCharacteristic(Characteristic.Model,
-							particleDeviceInfoJson.product_id === 0 ? "Core" :
-							particleDeviceInfoJson.product_id === 6? "Photon" :
-							"Electron/unknown"
-						)
-						.setCharacteristic(Characteristic.SerialNumber, deviceid);
-				}
-			});
-			
-
+		informationService
+			.setCharacteristic(Characteristic.Manufacturer, "Particle")
+      .setCharacteristic(Characteristic.SerialNumber, deviceid)
+			.getCharacteristic(Characteristic.Model)
+      .on('get', this.getModelInfo.bind(this));
 
 		temperatureService = new Service.TemperatureSensor(roomName + " Temperature");
 
@@ -271,7 +280,7 @@ ParticleIoAccessory.prototype = {
 			}, false);
 
 		if (this.bulbServiceHandling == "yes") {
-ervice
+      return [informationService, temperatureService, lightSensorService, humiditySensorService, bulbService];
 		}else{
 			return [informationService, temperatureService, lightSensorService, humiditySensorService];
 		}
