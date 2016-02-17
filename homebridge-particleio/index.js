@@ -1,5 +1,6 @@
 var Service, Characteristic;
 var Request = require("request");
+var SyncRequest = require("sync-request");
 var EventSource = require('eventsource');
 
 var informationService;
@@ -14,10 +15,6 @@ var roomName;
 
 var eventName = "HKSValues";
 
-var url;
-var deviceid;
-var accesstoken;
-
 module.exports = function (homebridge) {
     Service = homebridge.hap.Service;
     Characteristic = homebridge.hap.Characteristic;
@@ -28,13 +25,14 @@ function ParticleIoAccessory(log, config) {
 	this.log = log;
 
 	// url info
-	url = config["cloud_url"];
-	deviceid = config["deviceid"];
-	accesstoken = config["accesstoken"];
-	bulbServiceHandling = config["bulb_service"];
-	roomName = config["room_name"];
-  variables = config["variables"]; // An object of variables that this device publishes
-  events = config["events"]; // an object of events that this device publishes and that this Hamebridge accessory should pay attention to
+	this.url = config["cloud_url"];
+	this.deviceid = config["deviceid"];
+	this.accesstoken = config["accesstoken"];
+	this.bulbServiceHandling = config["bulb_service"];
+	this.roomName = config["room_name"];
+  this.variables = config["variables"]; // An object of variables that this device publishes
+  this.events = config["events"]; // an object of events that this device publishes and that this Hamebridge accessory should pay attention to
+
 }
 
 function random(low, high) {
@@ -51,42 +49,20 @@ ParticleIoAccessory.prototype = {
 		callback(null, 0.0);
 	},
 
-  getModelInfo: function(callback) {
-    var particleDeviceInfoUrl = url + deviceid + "?access_token=" + accesstoken;
-		console.log(particleDeviceInfoUrl);
-
-    Request.get(particleDeviceInfoUrl,
-      function(error, response, body) {
-        console.log(response);
-        if(!error && response.statusCode === 200 ) {
-          particleDeviceInfoJson = response.toJSON();
-
-          informationService.setCharacteristic(Characteristic.Model,
-            particleDeviceInfoJson.product_id === 0 ? "Core" :
-            particleDeviceInfoJson.product_id === 6 ? "Photon" :
-            "Electron/unknown"
-          );
-          callback();
-        } else {
-          callback(error);
-        }
-      }
-    );
-  },
 	setBulbState: function(state, callback) {
-		var setLightOnUrl = url + deviceid + "/ctrllight";
+		var setLightOnUrl = this.url + this.deviceid + "/ctrllight";
 
 		Request.post(
 			setLightOnUrl, {
 				form: {
-					access_token: accesstoken,
+					access_token: this.accesstoken,
 					args: (state ? 1 : 0)
 				}
 			},
 			function(error, response, body) {
 				// If not error then prepare message and send
 
-				console.log(response);
+				this.log(response);
 
 				if (!error) {
 					callback();
@@ -98,21 +74,21 @@ ParticleIoAccessory.prototype = {
 	},
 
 	setBrightness: function(level, callback) {
-		console.log(level);
+		this.log(level);
 
-		var setLightBrightnessUrl = url + deviceid + "/brightness";
+		var setLightBrightnessUrl = this.url + this.deviceid + "/brightness";
 
 		Request.post(
 			setLightBrightnessUrl, {
 				form: {
-					access_token: accesstoken,
+					access_token: this.accesstoken,
 					args: level
 				}
 			},
 			function(error, response, body) {
 				// If not error then prepare message and send
 
-				console.log(response);
+				this.log(response);
 
 				if (!error) {
 					callback();
@@ -126,19 +102,19 @@ ParticleIoAccessory.prototype = {
 	setHue: function(value, callback) {
 		console.log(value);
 
-		var setLightHueUrl = url + deviceid + "/sethue";
+		var setLightHueUrl = this.url + this.deviceid + "/sethue";
 
 		Request.post(
 			setLightHueUrl, {
 				form: {
-					access_token: accesstoken,
+					access_token: this.accesstoken,
 					args: value
 				}
 			},
 			function(error, response, body) {
 				// If not error then prepare message and send
 
-				console.log(response);
+				this.log(response);
 
 				if (!error) {
 					callback();
@@ -199,19 +175,30 @@ ParticleIoAccessory.prototype = {
 		// the default values for things like serial number, model, etc.
 		informationService = new Service.AccessoryInformation();
 
-		informationService
-			.setCharacteristic(Characteristic.Manufacturer, "Particle")
-      .setCharacteristic(Characteristic.SerialNumber, deviceid)
-			.getCharacteristic(Characteristic.Model)
-      .on('get', this.getModelInfo.bind(this));
+    var particleDeviceInfoUrl = this.url + this.deviceid + "?access_token=" + this.accesstoken;
+		this.log(particleDeviceInfoUrl);
 
-		temperatureService = new Service.TemperatureSensor(roomName + " Temperature");
+    var sr = SyncRequest('GET', particleDeviceInfoUrl);
+    var particleDeviceInfoJson = JSON.parse(sr.getBody('utf8'));
+
+    this.log(particleDeviceInfoJson);
+
+		informationService
+      .setCharacteristic(Characteristic.Name, particleDeviceInfoJson.name)
+			.setCharacteristic(Characteristic.Manufacturer, "Particle")
+      .setCharacteristic(Characteristic.SerialNumber, this.deviceid)
+			.setCharacteristic(Characteristic.Model,  particleDeviceInfoJson.product_id === 0 ? "Core" :
+                                                particleDeviceInfoJson.product_id === 6 ? "Photon" :
+                                                "Electron/unknown")
+      .addCharacteristic(Characteristic.FirmwareRevision).setValue(particleDeviceInfoJson.pinned_build_target);
+
+		temperatureService = new Service.TemperatureSensor(this.roomName + " Temperature");
 
 		temperatureService
 			.getCharacteristic(Characteristic.CurrentTemperature)
 			.on('get', this.getDefaultValue.bind(this));
 
-		lightSensorService = new Service.LightSensor(roomName + " Light Sensor");
+		lightSensorService = new Service.LightSensor(this.roomName + " Light Sensor");
 
 		lightSensorService
 			.getCharacteristic(Characteristic.CurrentAmbientLightLevel)
@@ -224,14 +211,14 @@ ParticleIoAccessory.prototype = {
 			.on('get', this.getDefaultValue.bind(this));
 
 		if (this.bulbServiceHandling == "yes") {
-			bulbService = new Service.Lightbulb(roomName + " Light");
+			bulbService = new Service.Lightbulb(this.roomName + " Light");
 
 			bulbService
 				.getCharacteristic(Characteristic.On)
 				.on('set', this.setBulbState.bind(this));
 
 			bulbService
-				.setCharacteristic(Characteristic.Name, roomName + " Light");
+				.setCharacteristic(Characteristic.Name, this.roomName + " Light");
 
 			bulbService
 				.addCharacteristic(new Characteristic.Brightness())
@@ -242,14 +229,14 @@ ParticleIoAccessory.prototype = {
 				.on('set', this.setHue.bind(this));
 		}
 
-		var eventUrl = url + deviceid + "/events/" + eventName + "?access_token=" + accesstoken;
+		var eventUrl = this.url + this.deviceid + "/events/" + eventName + "?access_token=" + this.accesstoken;
 
-		console.log(eventUrl);
+		this.log(eventUrl);
 
 		var es = new EventSource(eventUrl);
 
 		es.onerror = function() {
-			console.log('ERROR!');
+			this.log('ERROR!');
 		};
 
 		es.addEventListener(eventName,
@@ -260,17 +247,17 @@ ParticleIoAccessory.prototype = {
 				//console.log(tokens);
 
 				if (tokens[0].toLowerCase() === "temperature") {
-					console.log("Temperature " + tokens[1] + " C");
+					this.log("Temperature " + tokens[1] + " C");
 
 					temperatureService
 						.setCharacteristic(Characteristic.CurrentTemperature, parseFloat(tokens[1]));
 				} else if (tokens[0].toLowerCase() === "lux") {
-					console.log("Light " + tokens[1] + " lux");
+					this.log("Light " + tokens[1] + " lux");
 
 					lightSensorService
 						.setCharacteristic(Characteristic.CurrentAmbientLightLevel, parseFloat(tokens[1]));
 				} else if (tokens[0].toLowerCase() === "humidity") {
-					console.log("Humidity " + tokens[1] + "%");
+					this.log("Humidity " + tokens[1] + "%");
 
 					humiditySensor
 						.setCharacteristic(Characteristic.CurrentRelativeHumidity, parseFloat(tokens[1]));
