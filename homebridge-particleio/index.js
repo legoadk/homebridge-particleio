@@ -32,16 +32,9 @@ var numToHex = function(val, len) {
     return s;
 };
 
-
-
-// var temperatureService;
-// var lightSensorService;
-// var humiditySensorService;
 // var bulbService;
 
 // var bulbServiceHandling;
-
-// var roomName;
 
 // var eventName = "HKSValues";
 
@@ -124,7 +117,8 @@ ParticleIo.prototype = {
           callback(null, hexToBase64(hPAtoHex(parseFloat(value.result)*10)));
         } else {
           if (this.service.testCharacteristic(Characteristic.BatteryLevel)) {
-            this.service.setCharacteristic(Characteristic.StatusLowBattery, parseFloat(value.result) > 10);
+            this.service.setCharacteristic(Characteristic.StatusLowBattery, parseFloat(value.result) < 10? 1 : 0)
+                        .setCharacteristic(Characteristic.ChargingState, null);
           }
           callback(null, parseFloat(value.result));
         }
@@ -135,126 +129,131 @@ ParticleIo.prototype = {
       }
     }.bind(this));
   },
-  // setBulbState: function(state, callback) {
-  //   var setLightOnUrl = this.url + this.device.id + "/ctrllight";
-  //
-  //   Request.post(
-  //     setLightOnUrl, {
-  //       form: {
-  //         access_token: this.accesstoken,
-  //         args: (state ? 1 : 0)
-  //       }
-  //     },
-  //     function(error, response, body) {
-  //       // If not error then prepare message and send
-  //
-  //       this.log(response);
-  //
-  //       if (!error) {
-  //         callback();
-  //       } else {
-  //         callback(error);
-  //       }
-  //     }
-  //   );
-  // },
 
-  // setBrightness: function(level, callback) {
-  //   this.log(level);
-  //
-  //   var setLightBrightnessUrl = this.url + this.device.id + "/brightness";
-  //
-  //   Request.post(
-  //     setLightBrightnessUrl, {
-  //       form: {
-  //         access_token: this.accesstoken,
-  //         args: level
-  //       }
-  //     },
-  //     function(error, response, body) {
-  //       // If not error then prepare message and send
-  //
-  //       this.log(response);
-  //
-  //       if (!error) {
-  //         callback();
-  //       } else {
-  //         callback(error);
-  //       }
-  //     }
-  //   );
-  // },
+  // NOTE: Not used until Functions are are added to the config reading process
+  setBulbState: function(state, callback) {
+    var setLightOnUrl = this.url + this.device.id + "/ctrllight";
 
-  // setHue: function(value, callback) {
-  //   console.log(value);
-  //
-  //   var setLightHueUrl = this.url + this.device.id + "/sethue";
-  //
-  //   Request.post(
-  //     setLightHueUrl, {
-  //       form: {
-  //         access_token: this.accesstoken,
-  //         args: value
-  //       }
-  //     },
-  //     function(error, response, body) {
-  //       // If not error then prepare message and send
-  //
-  //       this.log(response);
-  //
-  //       if (!error) {
-  //         callback();
-  //       } else {
-  //         callback(error);
-  //       }
-  //     }
-  //   );
-  // },
+    Request.post(
+      setLightOnUrl, {
+        form: {
+          access_token: this.accesstoken,
+          args: (state ? 1 : 0)
+        }
+      },
+      function(error, response, body) {
+        // If not error then prepare message and send
 
-  // HSVtoRGB: function(h, s, v) {
-  //   while (h < 0) {
-  //     h += 360;
-  //   }
-  //   i = (h / 60 >> 0) % 6;
-  //   f = h / 60 - i;
-  //   v *= 255;
-  //   p = v * (1 - s);
-  //   q = v * (1 - f * s);
-  //   t = v * (1 - (1 - f) * s);
-  //   switch (i) {
-  //     case 0:
-  //     r = v;
-  //     g = t;
-  //     b = p;
-  //     break;
-  //     case 1:
-  //     r = q;
-  //     g = v;
-  //     b = p;
-  //     break;
-  //     case 2:
-  //     r = p;
-  //     g = v;
-  //     b = t;
-  //     break;
-  //     case 3:
-  //     r = p;
-  //     g = q;
-  //     b = v;
-  //     break;
-  //     case 4:
-  //     r = t;
-  //     g = p;
-  //     b = v;
-  //     break;
-  //     case 5:
-  //     r = v;
-  //     g = p;
-  //     b = q;
-  //   }
-  //
-  //   return [r, g, b];
-  // },
+        this.log(response);
+
+        if (!error) {
+          callback();
+        } else {
+          callback(error);
+        }
+      }
+    );
+  },
+
+  // NOTE: Not used until Functions are are added to the config reading process
+  setBrightness: function(level, callback) {
+    this.log(level);
+
+    var setLightBrightnessUrl = this.url + this.device.id + "/brightness";
+
+    Request.post(
+      setLightBrightnessUrl, {
+        form: {
+          access_token: this.accesstoken,
+          args: level
+        }
+      },
+      function(error, response, body) {
+        // If not error then prepare message and send
+
+        this.log(response);
+
+        if (!error) {
+          callback();
+        } else {
+          callback(error);
+        }
+      }
+    );
+  },
+
+  // NOTE: Not used until Functions are are added to the config reading process
+  setHue: function(value, callback) {
+    console.log(value);
+
+    var setLightHueUrl = this.url + this.device.id + "/sethue";
+
+    Request.post(
+      setLightHueUrl, {
+        form: {
+          access_token: this.accesstoken,
+          args: value
+        }
+      },
+      function(error, response, body) {
+        // If not error then prepare message and send
+
+        this.log(response);
+
+        if (!error) {
+          callback();
+        } else {
+          callback(error);
+        }
+      }
+    );
+  },
+
+  // NOTE: Not used until Functions are are added to the config reading process
+  HSVtoRGB: function(h, s, v) {
+    while (h < 0) {
+      h += 360;
+    }
+    i = (h / 60 >> 0) % 6;
+    f = h / 60 - i;
+    v *= 255;
+    p = v * (1 - s);
+    q = v * (1 - f * s);
+    t = v * (1 - (1 - f) * s);
+    switch (i) {
+      case 0:
+      r = v;
+      g = t;
+      b = p;
+      break;
+      case 1:
+      r = q;
+      g = v;
+      b = p;
+      break;
+      case 2:
+      r = p;
+      g = v;
+      b = t;
+      break;
+      case 3:
+      r = p;
+      g = q;
+      b = v;
+      break;
+      case 4:
+      r = t;
+      g = p;
+      b = v;
+      break;
+      case 5:
+      r = v;
+      g = p;
+      b = q;
+    }
+
+    return [r, g, b];
+  },
 
   getServices: function() {
     that = this;
@@ -275,17 +274,18 @@ ParticleIo.prototype = {
     this.informationService = new Service.AccessoryInformation();
 
     this.informationService
-    // .setCharacteristic(Characteristic.Name, this.device.name) // Why bother? from within an accessory, this no longer makes a difference
+    .setCharacteristic(Characteristic.Name, this.device.name) // Why bother? from within an accessory, this no longer makes a difference
     .setCharacteristic(Characteristic.Manufacturer, "Particle")
     .setCharacteristic(Characteristic.SerialNumber, this.device.id)
     .setCharacteristic(Characteristic.Model,  this.device.product_id === 0 ? "Core" :
                                               this.device.product_id === 6 ? "Photon" :
-                                                                             "Electron/unknown")
+                                              this.device.cellular === true? "Electron" :
+                                                                             "Unknown")
     .addCharacteristic(Characteristic.FirmwareRevision).setValue(this.device.pinned_build_target);
 
-    // Here is where we will have to iterate the config and populate Services and Characteristics.
     this._services = [this.informationService];
 
+    // Here is where we will have to iterate the config and populate Services and Characteristics.
     this.variables = this.variables.filter(
       function(variable){
         if(variable.name in this.device.variables) {
@@ -305,7 +305,7 @@ ParticleIo.prototype = {
       switch(variable.type) {
         case "Temperature":
           variable.service = new Service.TemperatureSensor(variable.display);
-          variable.service.getCharacteristic(Characteristic.CurrentTemperature)
+          variable.service.getCharacteristic(Characteristic.CurrentTemperature).setProps({ minValue: -40.0, minStep: 0.01 })
           .on('get', that.getVariable.bind(variable));
           this.log("Configured a TemperatureSensor service with name", variable.display, "for variable", variable.name);
           this._services.push(variable.service);
@@ -343,80 +343,9 @@ ParticleIo.prototype = {
           break;
       }
     }.bind(this));
-    // temperatureService = new Service.TemperatureSensor(this.roomName + " Temperature");
-    //
-    // temperatureService
-    // .getCharacteristic(Characteristic.CurrentTemperature)
-    // .on('get', this.getDefaultValue.bind(this));
-
-
-    // humiditySensorService = new Service.HumiditySensor();
-    //
-    // humiditySensorService
-    // .getCharacteristic(Characteristic.CurrentRelativeHumidity)
-    // .on('get', this.getDefaultValue.bind(this));
-
-    // if (this.bulbServiceHandling == "yes") {
-    //   bulbService = new Service.Lightbulb(this.roomName + " Light");
-    //
-    //   bulbService
-    //   .getCharacteristic(Characteristic.On)
-    //   .on('set', this.setBulbState.bind(this));
-    //
-    //   bulbService
-    //   .setCharacteristic(Characteristic.Name, this.roomName + " Light");
-    //
-    //   bulbService
-    //   .addCharacteristic(new Characteristic.Brightness())
-    //   .on('set', this.setBrightness.bind(this));
-    //
-    //   bulbService
-    //   .addCharacteristic(new Characteristic.Hue())
-    //   .on('set', this.setHue.bind(this));
-    // }
-
-    //var eventUrl = this.url + this.device.id + "/events/" + eventName + "?access_token=" + this.accesstoken;
-
-    //this.log(eventUrl);
-
-    //var es = new EventSource(eventUrl);
-
-    // es.onerror = function() {
-    //   this.log('ERROR!');
-    // };
-
-    // es.addEventListener(eventName,
-    //   function(e) {
-    //     var data = JSON.parse(e.data);
-    //     var tokens = data.data.split('=');
-    //
-    //     //console.log(tokens);
-    //
-    //     if (tokens[0].toLowerCase() === "temperature") {
-    //       this.log("Temperature " + tokens[1] + " C");
-    //
-    //       temperatureService
-    //       .setCharacteristic(Characteristic.CurrentTemperature, parseFloat(tokens[1]));
-    //     } else if (tokens[0].toLowerCase() === "lux") {
-    //       this.log("Light " + tokens[1] + " lux");
-    //
-    //       lightSensorService
-    //       .setCharacteristic(Characteristic.CurrentAmbientLightLevel, parseFloat(tokens[1]));
-    //     } else if (tokens[0].toLowerCase() === "humidity") {
-    //       this.log("Humidity " + tokens[1] + "%");
-    //
-    //       humiditySensor
-    //       .setCharacteristic(Characteristic.CurrentRelativeHumidity, parseFloat(tokens[1]));
-    //     }
-    //
-    //     //console.log(data.data);
-    //   }, false);
-    //
-    //   if (this.bulbServiceHandling == "yes") {
-    //     return [informationService, temperatureService, lightSensorService, humiditySensorService, bulbService];
-    //   }else{
 
     // this.log(this._services);
+
     return this._services;
   }
 };
