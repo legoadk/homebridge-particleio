@@ -9,4 +9,4 @@ npm install request
 npm install sync-request
 ```
 
-Configure Homebridge to use your ParticleIo sccessorry, and restart!
+Configure Homebridge to use your ParticleIo accessory, and restart!
