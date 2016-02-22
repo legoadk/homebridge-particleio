@@ -269,7 +269,7 @@ ParticleIo.prototype = {
     this.log("Successfully polled device information for Device ID", this.device.id);
     this.device = JSON.parse(sr.getBody('utf8'));
 
-    this.log(this.device);
+    //this.log(this.device);
 
     this.informationService = new Service.AccessoryInformation();
 
