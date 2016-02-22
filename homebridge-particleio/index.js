@@ -1,275 +1,422 @@
-var Service, Characteristic;
+var Service, Characteristic, AirPressureService, AirPressureCharacteristic;
 var Request = require("request");
 var SyncRequest = require("sync-request");
 var EventSource = require('eventsource');
+var inherits = require('util').inherits;
 
-var informationService;
-var temperatureService;
-var lightSensorService;
-var humiditySensorService;
-var bulbService;
+var hexToBase64 = function(val) {
+    return new Buffer((''+val).replace(/[^0-9A-F]/ig, ''), 'hex').toString('base64');
+};
+var base64ToHex = function(val) {
+    if(!val) return val;
+    return new Buffer(val, 'base64').toString('hex');
+};
+var swap16 = function (val) {
+    return ((val & 0xFF) << 8)
+           | ((val >> 8) & 0xFF);
+};
+var hexToHPA = function(val) {
+    return parseInt(swap16(val), 10);
+};
+var hPAtoHex = function(val) {
+    return swap16(Math.round(val)).toString(16);
+};
+var numToHex = function(val, len) {
+    var s = Number(val).toString(16);
+    if(s.length % 2 !== 0) {
+        s = '0' + s;
+    }
+    if(len) {
+        return ('0000000000000' + s).slice(-1 * len);
+    }
+    return s;
+};
 
-var bulbServiceHandling;
 
-var roomName;
 
-var eventName = "HKSValues";
+// var temperatureService;
+// var lightSensorService;
+// var humiditySensorService;
+// var bulbService;
+
+// var bulbServiceHandling;
+
+// var roomName;
+
+// var eventName = "HKSValues";
 
 module.exports = function (homebridge) {
-    Service = homebridge.hap.Service;
-    Characteristic = homebridge.hap.Characteristic;
-    homebridge.registerAccessory("homebridge-particleio", "ParticleIoAccessory", ParticleIoAccessory);
-}
+  Service = homebridge.hap.Service;
+  Characteristic = homebridge.hap.Characteristic;
 
-function ParticleIoAccessory(log, config) {
-	this.log = log;
+  AirPressureCharacteristic = function() {
+    Characteristic.call(this, "Relative Atmospheric Pressure", 'E863F10F-079E-48FF-8F27-9C2605A29F52');
+    this.setProps({
+      format: Characteristic.Formats.DATA,
+      perms: [Characteristic.Perms.READ],
+    });
+    this.value = hexToBase64(hPAtoHex(1234));
+    var self = this;
+    // this.on('get', function(cb) {
+    //     console.log(self.name, 'was read', base64ToHex(self.value));
+    //     cb(null, self.value);
+    // });
+  };
+  inherits(AirPressureCharacteristic, Characteristic);
 
-	// url info
-	this.url = config["cloud_url"];
-	this.deviceid = config["deviceid"];
-	this.accesstoken = config["accesstoken"];
-	this.bulbServiceHandling = config["bulb_service"];
-	this.roomName = config["room_name"];
-  this.variables = config["variables"]; // An object of variables that this device publishes
-  this.events = config["events"]; // an object of events that this device publishes and that this Hamebridge accessory should pay attention to
+
+  AirPressureService = function(displayName, subtype) {
+      Service.call(this, displayName, 'E863F001-079E-48FF-8F27-9C2605A29F52', subtype);
+
+      // Required Characteristics
+      this.addCharacteristic(AirPressureCharacteristic);
+
+      // Optional Characteristics
+      this.addOptionalCharacteristic(Characteristic.Name);
+  };
+
+  AirPressureService.UUID = 'E863F001-079E-48FF-8F27-9C2605A29F52';
+
+  inherits(AirPressureService, Service);
+
+
+  homebridge.registerAccessory("homebridge-particleio", "ParticleIo", ParticleIo);
+};
+
+function ParticleIo(log, config) {
+  this.log = log;
+  this.device = { id: config.deviceid };
+  // url info
+  this.url = config.cloud_url;
+  this.accesstoken = config.accesstoken;
+  // this.bulbServiceHandling = config.bulb_service;
+  // this.roomName = config.room_name;
+  this.variables = config.variables; // An object of variables that this device publishes
+  //this.log(this.variables);
+  this.events = config.events; // an object of events that this device publishes and that this Hamebridge accessory should pay attention to
 
 }
 
 function random(low, high) {
-	return Math.random() * (high - low) + low;
+  return Math.random() * (high - low) + low;
 }
 
-ParticleIoAccessory.prototype = {
-	identify: function(callback) {
-		this.log("Identify requested!");
-		callback(); // success
-	},
+ParticleIo.prototype = {
+  identify: function(callback) {
+    this.log("Identify requested!");
+    callback(); // success
+  },
 
-	getDefaultValue: function(callback) {
-		callback(null, 0.0);
-	},
+  getDefaultValue: function(callback) {
+    callback(null, 0.0);
+  },
 
-	setBulbState: function(state, callback) {
-		var setLightOnUrl = this.url + this.deviceid + "/ctrllight";
+  getVariable: function(callback) {
+    this.that.log('getVariable called:', this.that.device.name, this.display);
 
-		Request.post(
-			setLightOnUrl, {
-				form: {
-					access_token: this.accesstoken,
-					args: (state ? 1 : 0)
-				}
-			},
-			function(error, response, body) {
-				// If not error then prepare message and send
+    var variableUrl = this.that.url + this.that.device.id + '/' + this.name +"?access_token=" + this.that.accesstoken;
+    //this.that.log(variableUrl);
+    Request(variableUrl, function(error, response, body) {
+      if(!error && response.statusCode == 200) {
+        var value = JSON.parse(body);
+        this.that.log("value of",this.name+":", value.result);
+        if(this.service.testCharacteristic(AirPressureCharacteristic) ) {
+          callback(null, hexToBase64(hPAtoHex(parseFloat(value.result)*10)));
+        } else {
+          if (this.service.testCharacteristic(Characteristic.BatteryLevel)) {
+            this.service.setCharacteristic(Characteristic.StatusLowBattery, parseFloat(value.result) > 10);
+          }
+          callback(null, parseFloat(value.result));
+        }
+      }
+      else {
+        this.that.log.warn(error);
+        callback(error);
+      }
+    }.bind(this));
+  },
+  // setBulbState: function(state, callback) {
+  //   var setLightOnUrl = this.url + this.device.id + "/ctrllight";
+  //
+  //   Request.post(
+  //     setLightOnUrl, {
+  //       form: {
+  //         access_token: this.accesstoken,
+  //         args: (state ? 1 : 0)
+  //       }
+  //     },
+  //     function(error, response, body) {
+  //       // If not error then prepare message and send
+  //
+  //       this.log(response);
+  //
+  //       if (!error) {
+  //         callback();
+  //       } else {
+  //         callback(error);
+  //       }
+  //     }
+  //   );
+  // },
 
-				this.log(response);
+  // setBrightness: function(level, callback) {
+  //   this.log(level);
+  //
+  //   var setLightBrightnessUrl = this.url + this.device.id + "/brightness";
+  //
+  //   Request.post(
+  //     setLightBrightnessUrl, {
+  //       form: {
+  //         access_token: this.accesstoken,
+  //         args: level
+  //       }
+  //     },
+  //     function(error, response, body) {
+  //       // If not error then prepare message and send
+  //
+  //       this.log(response);
+  //
+  //       if (!error) {
+  //         callback();
+  //       } else {
+  //         callback(error);
+  //       }
+  //     }
+  //   );
+  // },
 
-				if (!error) {
-					callback();
-				} else {
-					callback(error);
-				}
-			}
-		);
-	},
+  // setHue: function(value, callback) {
+  //   console.log(value);
+  //
+  //   var setLightHueUrl = this.url + this.device.id + "/sethue";
+  //
+  //   Request.post(
+  //     setLightHueUrl, {
+  //       form: {
+  //         access_token: this.accesstoken,
+  //         args: value
+  //       }
+  //     },
+  //     function(error, response, body) {
+  //       // If not error then prepare message and send
+  //
+  //       this.log(response);
+  //
+  //       if (!error) {
+  //         callback();
+  //       } else {
+  //         callback(error);
+  //       }
+  //     }
+  //   );
+  // },
 
-	setBrightness: function(level, callback) {
-		this.log(level);
+  // HSVtoRGB: function(h, s, v) {
+  //   while (h < 0) {
+  //     h += 360;
+  //   }
+  //   i = (h / 60 >> 0) % 6;
+  //   f = h / 60 - i;
+  //   v *= 255;
+  //   p = v * (1 - s);
+  //   q = v * (1 - f * s);
+  //   t = v * (1 - (1 - f) * s);
+  //   switch (i) {
+  //     case 0:
+  //     r = v;
+  //     g = t;
+  //     b = p;
+  //     break;
+  //     case 1:
+  //     r = q;
+  //     g = v;
+  //     b = p;
+  //     break;
+  //     case 2:
+  //     r = p;
+  //     g = v;
+  //     b = t;
+  //     break;
+  //     case 3:
+  //     r = p;
+  //     g = q;
+  //     b = v;
+  //     break;
+  //     case 4:
+  //     r = t;
+  //     g = p;
+  //     b = v;
+  //     break;
+  //     case 5:
+  //     r = v;
+  //     g = p;
+  //     b = q;
+  //   }
+  //
+  //   return [r, g, b];
+  // },
 
-		var setLightBrightnessUrl = this.url + this.deviceid + "/brightness";
+  getServices: function() {
+    that = this;
 
-		Request.post(
-			setLightBrightnessUrl, {
-				form: {
-					access_token: this.accesstoken,
-					args: level
-				}
-			},
-			function(error, response, body) {
-				// If not error then prepare message and send
-
-				this.log(response);
-
-				if (!error) {
-					callback();
-				} else {
-					callback(error);
-				}
-			}
-		);
-	},
-
-	setHue: function(value, callback) {
-		console.log(value);
-
-		var setLightHueUrl = this.url + this.deviceid + "/sethue";
-
-		Request.post(
-			setLightHueUrl, {
-				form: {
-					access_token: this.accesstoken,
-					args: value
-				}
-			},
-			function(error, response, body) {
-				// If not error then prepare message and send
-
-				this.log(response);
-
-				if (!error) {
-					callback();
-				} else {
-					callback(error);
-				}
-			}
-		);
-	},
-
-	HSVtoRGB: function(h, s, v) {
-		while (h < 0) {
-			h += 360;
-		}
-		i = (h / 60 >> 0) % 6;
-		f = h / 60 - i;
-		v *= 255;
-		p = v * (1 - s);
-		q = v * (1 - f * s);
-		t = v * (1 - (1 - f) * s);
-		switch (i) {
-			case 0:
-				r = v;
-				g = t;
-				b = p;
-				break;
-			case 1:
-				r = q;
-				g = v;
-				b = p;
-				break;
-			case 2:
-				r = p;
-				g = v;
-				b = t;
-				break;
-			case 3:
-				r = p;
-				g = q;
-				b = v;
-				break;
-			case 4:
-				r = t;
-				g = p;
-				b = v;
-				break;
-			case 5:
-				r = v;
-				g = p;
-				b = q;
-		}
-
-		return [r, g, b];
-	},
-
-	getServices: function() {
-		// you can OPTIONALLY create an information service if you wish to override
-		// the default values for things like serial number, model, etc.
-		informationService = new Service.AccessoryInformation();
-
-    var particleDeviceInfoUrl = this.url + this.deviceid + "?access_token=" + this.accesstoken;
-		this.log(particleDeviceInfoUrl);
+    var particleDeviceInfoUrl = this.url + this.device.id + "?access_token=" + this.accesstoken;
+    //this.log(particleDeviceInfoUrl);
 
     var sr = SyncRequest('GET', particleDeviceInfoUrl);
-    var particleDeviceInfoJson = JSON.parse(sr.getBody('utf8'));
+    if(sr.statusCode != 200) {
+      this.log.error('Could not poll device information. This accessory will not be functional.');
+      return [];
+    }
+    this.log("Successfully polled device information for Device ID", this.device.id);
+    this.device = JSON.parse(sr.getBody('utf8'));
 
-    this.log(particleDeviceInfoJson);
+    this.log(this.device);
 
-		informationService
-      .setCharacteristic(Characteristic.Name, particleDeviceInfoJson.name)
-			.setCharacteristic(Characteristic.Manufacturer, "Particle")
-      .setCharacteristic(Characteristic.SerialNumber, this.deviceid)
-			.setCharacteristic(Characteristic.Model,  particleDeviceInfoJson.product_id === 0 ? "Core" :
-                                                particleDeviceInfoJson.product_id === 6 ? "Photon" :
-                                                "Electron/unknown")
-      .addCharacteristic(Characteristic.FirmwareRevision).setValue(particleDeviceInfoJson.pinned_build_target);
+    this.informationService = new Service.AccessoryInformation();
 
-		temperatureService = new Service.TemperatureSensor(this.roomName + " Temperature");
+    this.informationService
+    // .setCharacteristic(Characteristic.Name, this.device.name) // Why bother? from within an accessory, this no longer makes a difference
+    .setCharacteristic(Characteristic.Manufacturer, "Particle")
+    .setCharacteristic(Characteristic.SerialNumber, this.device.id)
+    .setCharacteristic(Characteristic.Model,  this.device.product_id === 0 ? "Core" :
+                                              this.device.product_id === 6 ? "Photon" :
+                                                                             "Electron/unknown")
+    .addCharacteristic(Characteristic.FirmwareRevision).setValue(this.device.pinned_build_target);
 
-		temperatureService
-			.getCharacteristic(Characteristic.CurrentTemperature)
-			.on('get', this.getDefaultValue.bind(this));
+    // Here is where we will have to iterate the config and populate Services and Characteristics.
+    this._services = [this.informationService];
 
-		lightSensorService = new Service.LightSensor(this.roomName + " Light Sensor");
+    this.variables = this.variables.filter(
+      function(variable){
+        if(variable.name in this.device.variables) {
+          this.log("Variable", variable.name, "is available on the Particle device; looks good.");
+          return true;
+        } else {
+          this.log.warn("Variable", variable.name, "does not appear to exist on the Particle device! Skipping.");
+          return false;
+        }
+      }, this);
 
-		lightSensorService
-			.getCharacteristic(Characteristic.CurrentAmbientLightLevel)
-			.on('get', this.getDefaultValue.bind(this));
+    // this.log(this.variables);
 
-		humiditySensorService = new Service.HumiditySensor();
+    this.variables.forEach(function(variable){
+      variable.that = this;
+      this.log("Variable", variable.name, "is set to use a", variable.type, "service.");
+      switch(variable.type) {
+        case "Temperature":
+          variable.service = new Service.TemperatureSensor(variable.display);
+          variable.service.getCharacteristic(Characteristic.CurrentTemperature)
+          .on('get', that.getVariable.bind(variable));
+          this.log("Configured a TemperatureSensor service with name", variable.display, "for variable", variable.name);
+          this._services.push(variable.service);
+          break;
+        case "Humidity":
+          variable.service = new Service.HumiditySensor(variable.display);
+          variable.service.getCharacteristic(Characteristic.CurrentRelativeHumidity)
+          .on('get', that.getVariable.bind(variable));
+          this.log("Configured a HumiditySensor service with name", variable.display, "for variable", variable.name);
+          this._services.push(variable.service);
+          break;
+        case "Light":
+          variable.service = new Service.LightSensor(variable.display);
+          variable.service.getCharacteristic(Characteristic.CurrentAmbientLightLevel)
+          .on('get', that.getVariable.bind(variable));
+          this.log("Configured a LightSensor service with name", variable.display, "for variable", variable.name);
+          this._services.push(variable.service);
+          break;
+        case "Battery":
+          variable.service = new Service.BatteryService(variable.display);
+          variable.service.getCharacteristic(Characteristic.BatteryLevel)
+          .on('get', that.getVariable.bind(variable));
+          this.log("Configured a BatteryService service with name", variable.display, "for variable", variable.name);
+          this._services.push(variable.service);
+          break;
+        case "Pressure":
+          variable.service = new AirPressureService(variable.display);
+          variable.service.getCharacteristic(AirPressureCharacteristic)
+          .on('get', that.getVariable.bind(variable));
+          this.log("Configured a AirPressureService service with name", variable.display, "for variable", variable.name);
+          this._services.push(variable.service);
+          break;
+        default:
+          this.log.warn(variable.name, "is trying to use a service that is not (yet?) supported! Skipping.");
+          break;
+      }
+    }.bind(this));
+    // temperatureService = new Service.TemperatureSensor(this.roomName + " Temperature");
+    //
+    // temperatureService
+    // .getCharacteristic(Characteristic.CurrentTemperature)
+    // .on('get', this.getDefaultValue.bind(this));
 
-		humiditySensorService
-			.getCharacteristic(Characteristic.CurrentRelativeHumidity)
-			.on('get', this.getDefaultValue.bind(this));
 
-		if (this.bulbServiceHandling == "yes") {
-			bulbService = new Service.Lightbulb(this.roomName + " Light");
+    // humiditySensorService = new Service.HumiditySensor();
+    //
+    // humiditySensorService
+    // .getCharacteristic(Characteristic.CurrentRelativeHumidity)
+    // .on('get', this.getDefaultValue.bind(this));
 
-			bulbService
-				.getCharacteristic(Characteristic.On)
-				.on('set', this.setBulbState.bind(this));
+    // if (this.bulbServiceHandling == "yes") {
+    //   bulbService = new Service.Lightbulb(this.roomName + " Light");
+    //
+    //   bulbService
+    //   .getCharacteristic(Characteristic.On)
+    //   .on('set', this.setBulbState.bind(this));
+    //
+    //   bulbService
+    //   .setCharacteristic(Characteristic.Name, this.roomName + " Light");
+    //
+    //   bulbService
+    //   .addCharacteristic(new Characteristic.Brightness())
+    //   .on('set', this.setBrightness.bind(this));
+    //
+    //   bulbService
+    //   .addCharacteristic(new Characteristic.Hue())
+    //   .on('set', this.setHue.bind(this));
+    // }
 
-			bulbService
-				.setCharacteristic(Characteristic.Name, this.roomName + " Light");
+    //var eventUrl = this.url + this.device.id + "/events/" + eventName + "?access_token=" + this.accesstoken;
 
-			bulbService
-				.addCharacteristic(new Characteristic.Brightness())
-				.on('set', this.setBrightness.bind(this));
+    //this.log(eventUrl);
 
-			bulbService
-				.addCharacteristic(new Characteristic.Hue())
-				.on('set', this.setHue.bind(this));
-		}
+    //var es = new EventSource(eventUrl);
 
-		var eventUrl = this.url + this.deviceid + "/events/" + eventName + "?access_token=" + this.accesstoken;
+    // es.onerror = function() {
+    //   this.log('ERROR!');
+    // };
 
-		this.log(eventUrl);
+    // es.addEventListener(eventName,
+    //   function(e) {
+    //     var data = JSON.parse(e.data);
+    //     var tokens = data.data.split('=');
+    //
+    //     //console.log(tokens);
+    //
+    //     if (tokens[0].toLowerCase() === "temperature") {
+    //       this.log("Temperature " + tokens[1] + " C");
+    //
+    //       temperatureService
+    //       .setCharacteristic(Characteristic.CurrentTemperature, parseFloat(tokens[1]));
+    //     } else if (tokens[0].toLowerCase() === "lux") {
+    //       this.log("Light " + tokens[1] + " lux");
+    //
+    //       lightSensorService
+    //       .setCharacteristic(Characteristic.CurrentAmbientLightLevel, parseFloat(tokens[1]));
+    //     } else if (tokens[0].toLowerCase() === "humidity") {
+    //       this.log("Humidity " + tokens[1] + "%");
+    //
+    //       humiditySensor
+    //       .setCharacteristic(Characteristic.CurrentRelativeHumidity, parseFloat(tokens[1]));
+    //     }
+    //
+    //     //console.log(data.data);
+    //   }, false);
+    //
+    //   if (this.bulbServiceHandling == "yes") {
+    //     return [informationService, temperatureService, lightSensorService, humiditySensorService, bulbService];
+    //   }else{
 
-		var es = new EventSource(eventUrl);
-
-		es.onerror = function() {
-			this.log('ERROR!');
-		};
-
-		es.addEventListener(eventName,
-			function(e) {
-				var data = JSON.parse(e.data);
-				var tokens = data.data.split('=');
-
-				//console.log(tokens);
-
-				if (tokens[0].toLowerCase() === "temperature") {
-					this.log("Temperature " + tokens[1] + " C");
-
-					temperatureService
-						.setCharacteristic(Characteristic.CurrentTemperature, parseFloat(tokens[1]));
-				} else if (tokens[0].toLowerCase() === "lux") {
-					this.log("Light " + tokens[1] + " lux");
-
-					lightSensorService
-						.setCharacteristic(Characteristic.CurrentAmbientLightLevel, parseFloat(tokens[1]));
-				} else if (tokens[0].toLowerCase() === "humidity") {
-					this.log("Humidity " + tokens[1] + "%");
-
-					humiditySensor
-						.setCharacteristic(Characteristic.CurrentRelativeHumidity, parseFloat(tokens[1]));
-				}
-
-				//console.log(data.data);
-			}, false);
-
-		if (this.bulbServiceHandling == "yes") {
-      return [informationService, temperatureService, lightSensorService, humiditySensorService, bulbService];
-		}else{
-			return [informationService, temperatureService, lightSensorService, humiditySensorService];
-		}
-	}
+    // this.log(this._services);
+    return this._services;
+  }
 };
